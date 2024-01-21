@@ -4,6 +4,7 @@ import (
 	"GoNews/pkg/storage"
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -17,19 +18,18 @@ type API struct {
 // Конструктор объекта API
 func New(db storage.Interface) *API {
 	api := API{
-		db: db,
+		db: db, router: mux.NewRouter(),
 	}
-	api.router = mux.NewRouter()
 	api.endpoints()
 	return &api
 }
 
 // Регистрация обработчиков API.
 func (api *API) endpoints() {
-	api.router.HandleFunc("/posts", api.postsHandler).Methods(http.MethodGet, http.MethodOptions)
-	api.router.HandleFunc("/posts", api.addPostHandler).Methods(http.MethodPost, http.MethodOptions)
-	api.router.HandleFunc("/posts", api.updatePostHandler).Methods(http.MethodPut, http.MethodOptions)
-	api.router.HandleFunc("/posts", api.deletePostHandler).Methods(http.MethodDelete, http.MethodOptions)
+	// получить n последних новостей
+	api.router.HandleFunc("/news/{n}", api.postsHandler).Methods(http.MethodGet, http.MethodOptions)
+	// веб-приложение
+	api.router.PathPrefix("/").Handler(http.StripPrefix("/", http.FileServer(http.Dir("./webapp"))))
 }
 
 // Получение маршрутизатора запросов.
@@ -40,17 +40,19 @@ func (api *API) Router() *mux.Router {
 
 // Получение всех публикаций.
 func (api *API) postsHandler(w http.ResponseWriter, r *http.Request) {
-	posts, err := api.db.Posts()
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if r.Method == http.MethodOptions {
+		return
+	}
+	s := mux.Vars(r)["n"]
+	n, _ := strconv.Atoi(s)
+	news, err := api.db.Posts(n)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	bytes, err := json.Marshal(posts)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Write(bytes)
+	json.NewEncoder(w).Encode(news)
 }
 
 // Добавление публикации.
@@ -62,22 +64,6 @@ func (api *API) addPostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = api.db.AddPost(p)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-}
-
-// Обновление публикации.
-func (api *API) updatePostHandler(w http.ResponseWriter, r *http.Request) {
-	var p storage.Post
-	err := json.NewDecoder(r.Body).Decode(&p)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	err = api.db.UpdatePost(p)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

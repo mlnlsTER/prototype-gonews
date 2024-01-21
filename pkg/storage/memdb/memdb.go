@@ -21,15 +21,6 @@ func (s *Store) AddPost(post storage.Post) error {
 	posts = append(posts, post)
 	return nil
 }
-func (s *Store) UpdatePost(upost storage.Post) error {
-	for i, post := range posts {
-		if post.ID == upost.ID {
-			posts[i] = post
-			return nil
-		}
-	}
-	return errors.New("post not found")
-}
 func (s *Store) DeletePost(post storage.Post) error {
 	for i, p := range posts {
 		if p.ID == post.ID {

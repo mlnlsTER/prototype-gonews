@@ -2,12 +2,14 @@ package main
 
 import (
 	"GoNews/pkg/api"
+	"GoNews/pkg/rss"
 	"GoNews/pkg/storage"
-	"GoNews/pkg/storage/memdb"
-	"GoNews/pkg/storage/mongo"
 	"GoNews/pkg/storage/postgres"
+	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"time"
 )
 
 // Сервер GoNews.
@@ -16,37 +18,67 @@ type server struct {
 	api *api.API
 }
 
+type config struct {
+	URLS   []string `json:"rss"`
+	Period int      `json:"request_period"`
+}
+
 func main() {
-	// Создаём объект сервера.
+	var err error
 	var srv server
 
-	// Создаём объекты баз данных.
-	//
-	// БД в памяти.
-	db1 := memdb.New()
-
-	// Реляционная БД PostgreSQL.
-	db2, err := postgres.New("postgres://postgres:postgres@server.domain/posts")
+	// Initialize PostgreSQL server storage.
+	srv.db, err = postgres.New("postgres://postgres:8952@localhost:5432/posts")
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// Документная БД MongoDB.
-	db3, err := mongo.New("mongodb://server.domain:27017/")
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, _, _ = db1, db2, db3
-
-	// Инициализируем хранилище сервера конкретной БД.
-	srv.db = db1
 
 	// Создаём объект API и регистрируем обработчики.
 	srv.api = api.New(srv.db)
+	c, err := ioutil.ReadFile("config.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	var conf config
+	err = json.Unmarshal(c, &conf)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// Запускаем веб-сервер на порту 8080 на всех интерфейсах.
-	// Предаём серверу маршрутизатор запросов,
-	// поэтому сервер будет все запросы отправлять на маршрутизатор.
-	// Маршрутизатор будет выбирать нужный обработчик.
-	http.ListenAndServe(":8080", srv.api.Router())
+	chPosts := make(chan []storage.Post)
+	chErrors := make(chan error)
+
+	for _, url := range conf.URLS {
+		go parseURL(url, chPosts, chErrors, conf.Period)
+	}
+
+	go func() {
+		for posts := range chPosts {
+			for _, post := range posts {
+				srv.db.AddPost(post)
+			}
+
+		}
+	}()
+
+	go func() {
+		for err = range chErrors {
+			log.Println(err)
+		}
+	}()
+
+	err = http.ListenAndServe(":8080", srv.api.Router())
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func parseURL(url string, chPosts chan []storage.Post, chErrors chan error, peroid int) {
+	posts, err := rss.Parse(url)
+	if err != nil {
+		chErrors <- err
+		return
+	}
+	chPosts <- posts
+	time.Sleep(time.Duration(peroid) * time.Minute)
 }
