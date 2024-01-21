@@ -7,12 +7,12 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-// Хранилище данных.
+// Data storage.
 type Storage struct {
 	db *pgxpool.Pool
 }
 
-// Конструктор, принимает строку подключения к БД.
+// Constructor creates a new Storage object.
 func New(constr string) (*Storage, error) {
 	db, err := pgxpool.Connect(context.Background(), constr)
 	if err != nil {
@@ -24,8 +24,11 @@ func New(constr string) (*Storage, error) {
 	return &s, nil
 }
 
-// Posts возвращает список публикаций из БД.
+// Posts returns the last n publications from the database.
 func (s *Storage) Posts(n int) ([]storage.Post, error) {
+	if n == 0 {
+		n = 6
+	}
 	rows, err := s.db.Query(context.Background(), `
 		SELECT 
 			id,
@@ -34,16 +37,14 @@ func (s *Storage) Posts(n int) ([]storage.Post, error) {
 			published_at,
 			link
 		FROM posts
-		ORDER BY id
+		ORDER BY id DESC
 		LIMIT $1;
-	`, n,)
+	`, n)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var posts []storage.Post
-	// итерирование по результату выполнения запроса
-	// и сканирование каждой строки в переменную
 	for rows.Next() {
 		var p storage.Post
 		err = rows.Scan(
@@ -56,31 +57,26 @@ func (s *Storage) Posts(n int) ([]storage.Post, error) {
 		if err != nil {
 			return nil, err
 		}
-		// добавление переменной в массив результатов
 		posts = append(posts, p)
 
 	}
 	return posts, rows.Err()
 }
 
-// AddPost создаёт новую публикацию
-func (s *Storage) AddPost(p storage.Post) error {
-	_, err := s.db.Exec(context.Background(), `
-		INSERT INTO posts (title, content, published_at, link)
-		VALUES ($1, $2, $3, $4);
-	`, p.Title, p.Content, p.PubTime, p.Link)
-	if err != nil {
-		return err
-	} else {
-		return nil
+// AddPosts creates a new publications in the database.
+func (s *Storage) AddPosts(posts []storage.Post) error {
+	for _, post := range posts {
+		_, err := s.db.Exec(context.Background(), `
+		INSERT INTO posts(title, content, published_at, link)
+		VALUES ($1, $2, $3, $4)`,
+			post.Title,
+			post.Content,
+			post.PubTime,
+			post.Link,
+		)
+		if err != nil {
+			return err
+		}
 	}
-}
-
-// Удалять публикацию по id
-func (s *Storage) DeletePost(post storage.Post) error {
-	_, err := s.db.Exec(context.Background(), `
-        DELETE FROM posts
-        WHERE id = $1;
-    `, post.ID)
-	return err
+	return nil
 }

@@ -4,7 +4,7 @@ package rss
 import (
 	"GoNews/pkg/storage"
 	"encoding/xml"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -31,14 +31,14 @@ type Item struct {
 	Link        string `xml:"link"`
 }
 
-// Parse читает rss-поток и возвращет
-// массив раскодированных новостей.
+// Parse reads the rss stream and 
+// returns an array of decoded news.
 func Parse(url string) ([]storage.Post, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

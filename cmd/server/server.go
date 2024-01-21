@@ -6,13 +6,13 @@ import (
 	"GoNews/pkg/storage"
 	"GoNews/pkg/storage/postgres"
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
-// Сервер GoNews.
+// GoNews Server.
 type server struct {
 	db  storage.Interface
 	api *api.API
@@ -33,9 +33,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Создаём объект API и регистрируем обработчики.
+	// Create API object and register handlers.
 	srv.api = api.New(srv.db)
-	c, err := ioutil.ReadFile("config.json")
+	c, err := os.ReadFile("cmd/server/config.json")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,10 +54,7 @@ func main() {
 
 	go func() {
 		for posts := range chPosts {
-			for _, post := range posts {
-				srv.db.AddPost(post)
-			}
-
+			srv.db.AddPosts(posts)
 		}
 	}()
 
@@ -67,18 +64,20 @@ func main() {
 		}
 	}()
 
-	err = http.ListenAndServe(":8080", srv.api.Router())
+	err = http.ListenAndServe(":8008", srv.api.Router())
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func parseURL(url string, chPosts chan []storage.Post, chErrors chan error, peroid int) {
-	posts, err := rss.Parse(url)
-	if err != nil {
-		chErrors <- err
-		return
+func parseURL(url string, chPosts chan<- []storage.Post, chErrors chan<- error, peroid int) {
+	for {
+		posts, err := rss.Parse(url)
+		if err != nil {
+			chErrors <- err
+			continue
+		}
+		chPosts <- posts
+		time.Sleep(time.Duration(peroid) * time.Minute)
 	}
-	chPosts <- posts
-	time.Sleep(time.Duration(peroid) * time.Minute)
 }
