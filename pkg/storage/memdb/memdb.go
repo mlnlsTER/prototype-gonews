@@ -1,16 +1,16 @@
 package memdb
 
 import (
-	"GoNews/pkg/storage"
+	"GoNews/news/pkg/storage"
 )
 
-// Хранилище данных.
-type DB []storage.Post
+// Data storage.
+type DB []newsStorage.Post
 
-func (db *DB) Posts() ([]storage.Post, error) {
+func (db *DB) Posts() ([]newsStorage.Post, error) {
 	return *db, nil
 }
-func (db *DB) AddPost(post storage.Post) error {
+func (db *DB) AddPost(post newsStorage.Post) error {
 	*db = append(*db, post)
 	return nil
 }

@@ -1,10 +1,11 @@
 package main
 
 import (
-	"GoNews/pkg/api"
-	"GoNews/pkg/rss"
-	"GoNews/pkg/storage"
-	"GoNews/pkg/storage/postgres"
+	"GoNews/news/pkg/api"
+	"GoNews/news/pkg/middleware"
+	"GoNews/news/pkg/rss"
+	newsStorage "GoNews/news/pkg/storage"
+	"GoNews/news/pkg/storage/postgres"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 
 // GoNews Server.
 type server struct {
-	db  storage.Interface
+	db  newsStorage.NewsInterface
 	api *api.API
 }
 
@@ -35,7 +36,7 @@ func main() {
 
 	// Create API object and register handlers.
 	srv.api = api.New(srv.db)
-	c, err := os.ReadFile("cmd/server/config.json")
+	c, err := os.ReadFile("config.json")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,7 +46,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	chPosts := make(chan []storage.Post)
+	chPosts := make(chan []newsStorage.Post)
 	chErrors := make(chan error)
 
 	for _, url := range conf.URLS {
@@ -63,14 +64,14 @@ func main() {
 			log.Println(err)
 		}
 	}()
-
-	err = http.ListenAndServe(":8008", srv.api.Router())
+	log.Println("News service started on :8081...")
+	err = http.ListenAndServe(":8081", middleware.RequestIDMiddleware(middleware.LoggingMiddleware(srv.api.Router())))
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func parseURL(url string, chPosts chan<- []storage.Post, chErrors chan<- error, peroid int) {
+func parseURL(url string, chPosts chan<- []newsStorage.Post, chErrors chan<- error, peroid int) {
 	for {
 		posts, err := rss.Parse(url)
 		if err != nil {

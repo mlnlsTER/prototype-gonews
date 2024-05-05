@@ -1,7 +1,6 @@
 {
     "rss":[
-       "https://www.theguardian.com/international/rss",
-       "https://habr.com/ru/rss/best/daily/?fl=ru"
+       "https://www.theguardian.com/international/rss"
     ],
     "request_period": 5
  }

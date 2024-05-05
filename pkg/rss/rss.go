@@ -2,7 +2,7 @@
 package rss
 
 import (
-	"GoNews/pkg/storage"
+	"GoNews/news/pkg/storage"
 	"encoding/xml"
 	"io"
 	"net/http"
@@ -31,9 +31,8 @@ type Item struct {
 	Link        string `xml:"link"`
 }
 
-// Parse reads the rss stream and 
-// returns an array of decoded news.
-func Parse(url string) ([]storage.Post, error) {
+// Parse reads the rss stream and returns an array of decoded news.
+func Parse(url string) ([]newsStorage.Post, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -47,9 +46,9 @@ func Parse(url string) ([]storage.Post, error) {
 	if err != nil {
 		return nil, err
 	}
-	var data []storage.Post
+	var data []newsStorage.Post
 	for _, item := range f.Chanel.Items {
-		var p storage.Post
+		var p newsStorage.Post
 		p.Title = item.Title
 		p.Content = item.Description
 		p.Content = strip.StripTags(p.Content)
